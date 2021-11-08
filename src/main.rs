@@ -71,7 +71,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 #[group]
 #[commands(
-    ping, help, settings, join, leave, play, force_skip, clear, now_playing, skip, todo, play_top, play_skip, queue, remove, reorder, force_skip_to, shuffle
+    ping, help, settings, join, leave, play, force_skip, clear, now_playing, skip, todo, play_top, play_skip, queue, remove, reorder, force_skip_to, shuffle, source
 )]
 struct General;
 

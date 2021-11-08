@@ -32,13 +32,17 @@ async fn help(ctx: &Context, msg: &Message) -> CommandResult {
 
 
 #[command]
+async fn source(ctx: &Context, msg: &Message) -> CommandResult {
+    embeds::source(ctx, msg).await;
+    Ok(())
+}
+
+
+
+#[command]
 async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     check_msg(msg.channel_id.say(&ctx.http, "```prolog
 TODO:
-
-#Bugs
-none known
-
 #Commands
 Aliases (show what aliases are available for each command)
 Ping (more verbose ping)
@@ -46,7 +50,8 @@ Loop (loop the currently playing song)
 Loopqueue (loop the whole queue)
 Lyrics (get the lyrics of the currently playing song)
 Removedupes (remove duplicate songs)
-Leavecleanup (Remove absent users songs from the queue)
+Leavecleanup (remove absent users songs from the queue)
+Settings (generally just finish the settings command)
 
 #Settings
 Dj Only Mode (songs can onlt be played by those with the DJ role)

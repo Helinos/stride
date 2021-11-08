@@ -56,6 +56,18 @@ pub async fn help (ctx: &Context, msg: &Message) {
   })).await);
 }
 
+pub async fn source (ctx: &Context, msg: &Message) {
+    check_msg(msg.channel_id.send_message(ctx, |m| {
+        m.reference_message(msg);
+        m.embed(|e| {
+            e.color(DEFAULT_COLOR);
+            e.description("[Stride on github](https://github.com/DontStarve72/stride)");
+            e
+        });
+        m
+    }).await);
+}
+
 
 
 /// =======================
@@ -63,6 +75,8 @@ pub async fn help (ctx: &Context, msg: &Message) {
 ///     SYSTEM MESSAGES
 /// 
 /// =======================
+
+
 
 pub async fn playing_song (ctx: &Context, msg: &Message, queue: &TrackQueue) {
     let track = queue.current().unwrap();
