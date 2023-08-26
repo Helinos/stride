@@ -28,8 +28,8 @@
 - [x] **DJ Only Mode**: Songs can only be played by people with the DJ role
 - [x] **Announce Songs**: Bot announces each song as it comes up in the queue (Requires single channel mode)
 
-## Fancy Commands (Commands that only work in this server)
-- **Play later**:
+## Funny commands (Only useable by hardcoded guilds)
+- [ ] **Play later**:
  - Add a song to the queue at a specified time
  - If the bot isn't in a channel, join the most populated one
  - If the nobody is in the channel, wait until someone joins and then follow them in
