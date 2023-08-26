@@ -1,2 +1,2 @@
-# stride
-An abysmally coded Discord music bot written in Rust
+#Stride
+A discord music bot written in rust that does what I want it to.

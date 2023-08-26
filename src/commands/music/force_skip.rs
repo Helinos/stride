@@ -1,38 +1,55 @@
-use crate::util::{
-    embeds,
-    music::MusicCommand,
+use crate::{
+    responses::{self, Say},
+    Context, Error,
 };
 
-use serenity::{
-    client::Context,
-    framework::standard::{macros::command, CommandResult},
-    model::channel::Message,
-};
+/// Skip a track without voting
+#[poise::command(slash_command, rename = "forceskip")]
+pub async fn force_skip(
+    context: Context<'_>,
+    #[description = "The position in the queue to skip to"] 
+    position: Option<usize>,
+) -> Result<(), Error> {
+    let guild = context.guild().unwrap();
+    let guild_id = guild.id;
 
+    let lava_client = context.data().lavalink.clone();
 
+    let Some(player_context) = lava_client.get_player_context(guild_id) else {
+        responses::ErrorMessage::BotNotInVC.say(context).await?;
+        return Ok(());
+    };
 
-#[command]
-#[only_in(guilds)]
-#[aliases(fs, forceskip)]
-async fn force_skip(ctx: &Context, msg: &Message) -> CommandResult {
-    let music_command = MusicCommand::new(ctx, msg).await;
-    let handler_lock = music_command.connected().await;
-    
-    // Requires the DJ role or the Manage Guild permission
-    if handler_lock.is_some() && music_command.has_dj().await {
-        let handler_lock = handler_lock.unwrap();
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-
-        let position = handler.queue().len();
-        if position > 0 {
-            queue.skip()?;
-            music_command.clear_votes().await;
-            embeds::skipped(ctx, msg).await;
-        } else {
-            embeds::not_playing(ctx, msg).await;
-        }
+    if player_context.get_player().await?.track.is_none() {
+        responses::ErrorMessage::BotNotPlaying.say(context).await?;
+        return Ok(());
     }
     
+    let mut queue = player_context.get_queue().await?;
+    let queue_length = queue.len();
+
+    match position {
+        Some(position) => {
+            
+            if 1 > position || position > queue_length {
+                responses::ErrorMessage::InvalidSkip.say(context).await?;
+                return Ok(());
+            }
+
+            let new_queue = queue.split_off(position as usize - 1);
+            player_context.replace_queue(new_queue)?;
+
+            responses::DefaultMessage::SkippedTo(position).say(context).await?;
+        }
+        None => responses::DefaultMessage::Skipped.say(context).await?,
+    }
+
+    if queue_length == 0 {
+        player_context.finish(false)?;
+    } else {
+        player_context.skip()?;
+    }
+    
+
     Ok(())
 }

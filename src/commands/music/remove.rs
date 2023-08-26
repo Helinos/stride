@@ -1,58 +1,51 @@
-use crate::util::{
-    music::MusicCommand,
-    misc::check_msg,
-    embeds,
+use crate::{
+    responses::{self, Say},
+    Context, Error,
 };
 
-use serenity::{
-    client::Context,
-    framework::standard::{macros::command, Args, CommandResult},
-    model::channel::Message,
-};
+// Move a track from one position in the queue to another
+#[poise::command(slash_command)]
+pub async fn remove(
+    context: Context<'_>,
+    #[description = "The position of the track in the queue that te be removed from the queue."]
+    position: usize,
+) -> Result<(), Error> {
+    let guild = context.guild().unwrap();
+    let guild_id = guild.id;
 
+    let lava_client = context.data().lavalink.clone();
 
+    let Some(player_context) = lava_client.get_player_context(guild_id) else {
+        responses::ErrorMessage::BotNotInVC.say(context).await?;
+        return Ok(());
+    };
 
-#[command]
-#[only_in(guilds)]
-#[aliases(r)]
-async fn remove (ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let mc = MusicCommand::new(ctx, msg).await;
-    let handler_lock = mc.connected().await;
-
-    // Requires the DJ role or the Manage Guild permission
-    if handler_lock.is_some() && mc.has_dj().await {
-        let handler_lock = handler_lock.unwrap();
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-
-        if queue.len() == 0 {
-            embeds::not_playing(ctx, msg).await;
-            return Ok(());
-        }
-        
-        let index = match args.single::<usize>() {  
-            Ok(0) => {
-                embeds::index_oor(ctx, msg).await;
-                return Ok(());
-            }
-            Ok(index) => index,
-            Err(_) => {
-                embeds::invalid_index(ctx, msg).await;
-                return Ok(());
-            }
-        };
-        
-        match queue.dequeue(index) {
-            Some(song) => {
-                let title = match &song.metadata().title {
-                    Some(title) => title,
-                    None => "N/A"
-                };
-                check_msg(msg.channel_id.say(&ctx.http, format!("`Placeholder` Removed song {}: {}.", index, title)).await);
-            },
-            None => embeds::index_oor(ctx, msg).await,
-        }
+    if player_context.get_player().await?.track.is_none() {
+        responses::ErrorMessage::BotNotPlaying.say(context).await?;
+        return Ok(());
     }
+
+    let mut queue = player_context.get_queue().await?;
+    let queue_length = queue.len();
+
+    // Test if the either position is valid
+    if 1 > position || position >= queue_length {
+        responses::error(context, "There is no track at the specified ").await?;
+        return Ok(());
+    }
+
+    let wrapped_track = queue.get(position - 1);
+    
+    let track = &wrapped_track.unwrap().track;
+    let title = &track.info.title;
+
+    match &track.info.uri {
+        Some(uri) => responses::default(context, format!("Removed [{}]({}) from the queue.", title, uri)).await?,
+        None => responses::default(context, format!("Removed {} from the queue.", title)).await?,
+    }
+    
+    queue.remove(position - 1);
+    player_context.replace_queue(queue)?;
 
     Ok(())
 }

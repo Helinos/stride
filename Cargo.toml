@@ -1,41 +1,42 @@
 [package]
 name = "stride"
 version = "0.1.0"
-authors = ["Helinos <helinos67@protonmail.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dotenv = "0.15"
-tracing = "0.1.23"
-tracing-subscriber = "0.2"
-uuid = "0.8.2"
-rand = "0.8.4"
+itertools = "0.11"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+serde_json = "1"
+futures = "0.3"
+dotenv = "0.15.0"
+indexmap = "2.0.0"
 
-[dependencies.serenity]
+[dependencies.poise]
+version = "0.5"
 default-features = false
-version = "0.10.9"
-features = [
-    "client", 
-    "gateway", 
-    "rustls_backend", 
-    "model",
-    "framework",
-    "cache",
-    "standard_framework",
-    "voice"
-    ]
+features = ["cache", "chrono", "handle_panics"]
 
 [dependencies.songbird]
-version = "0.2.0"
-features = ["builtin-queue", "serenity"]
+version = "0.3"
+default-features = false
+features = ["gateway", "serenity-native"]
+
+[dependencies.tokio]
+version = "1"
+features = ["rt-multi-thread", "macros"]
+
+[dependencies.hook]
+git = "https://github.com/arqunis/hook"
+
+[dependencies.lavalink-rs]
+version = "0.10.0-beta"
+default-features = false
+features = ["songbird", "serenity-native", "native-tls"]
 
 [dependencies.sqlx]
 default-features = false
-version = "0.5.7"
-features = [ "runtime-tokio-rustls", "sqlite", "macros"]
-
-[dependencies.tokio]
-version = "1.0"
-features = ["macros", "signal", "rt-multi-thread"]
+version = "0.7.1"
+features = [ "runtime-tokio-rustls", "mysql", "macros"]

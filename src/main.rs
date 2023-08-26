@@ -1,143 +1,28 @@
-//! Requires the 'framework' feature flag be enabled in your project's
-//! `Cargo.toml`.
-//!
-//! This can be enabled by specifying the feature in the dependency section:
-//!
-//! ```toml
-//! [dependencies.serenity]
-//! git = "https://github.com/serenity-rs/serenity.git"
-//! features = ["framework", "standard_framework"]
-//! ```
 mod commands;
-mod util;
+mod database;
+mod responses;
 
-use commands::{
-    meta::*, 
-    settings::*, 
-    music::{
-        clear::*,
-        force_skip_to::*,
-        force_skip::*,
-        join::*,
-        leave::*,
-        now_playing::*,
-        play::*,
-        queue::*,
-        remove::*,
-        reorder::*,
-        shuffle::*,
-        skip::*,       
-    }
+use std::{collections::HashSet, env};
+
+use commands::{music::{play::play, force_skip::force_skip, reorder::reorder, queue::queue, remove::remove}, settings::settings};
+use hook::hook;
+use lavalink_rs::{
+    model::events,
+    prelude::{LavalinkClient, NodeBuilder},
 };
+use poise::serenity_prelude as serenity;
 
-use util::database::DatabaseTool;
-
-use std::{collections::{HashSet, HashMap}, env, sync::Arc};
-use sqlx::{sqlite::SqlitePool};
-use uuid::Uuid;
-
+use database::DatabaseManager;
 use songbird::SerenityInit;
+use sqlx::ConnectOptions;
+use tracing::info;
 
-use serenity::{
-    async_trait,
-    client::bridge::gateway::ShardManager,
-    framework::{
-        standard::{
-            macros::{
-                group,
-                hook,
-            },
-        },
-        StandardFramework
-    },
-    http::Http,
-    model::{
-        event::ResumedEvent,
-        gateway::Ready,
-        channel::Message,
-        id::{
-            UserId,
-            GuildId,
-        }
-    },
-    prelude::*,
-};
-
-use tokio::sync::RwLock;
-use tracing::{error, info};
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
-
-
-
-#[group]
-#[commands(
-    ping, help, settings, join, leave, play, force_skip, clear, now_playing, skip, todo, play_top, play_skip, queue, remove, reorder, force_skip_to, shuffle, source
-)]
-struct General;
-
-
-struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        info!("Connected as {}", ready.user.name);
-    }
-
-    async fn resume(&self, _: Context, _: ResumedEvent) {
-        info!("Resumed");
-    }
-}
-
-
-pub struct ShardManagerContainer;
-
-impl TypeMapKey for ShardManagerContainer {
-    type Value = Arc<Mutex<ShardManager>>;
-}
-
-struct Database;
-
-impl TypeMapKey for Database {
-    type Value = DatabaseTool;
-}
-
-struct GuildSkipVotes;
-
-impl TypeMapKey for GuildSkipVotes {
-    type Value = Arc<RwLock<HashMap<GuildId, HashSet<UserId>>>>;
-}
-
-struct UserTrackMap;
-
-impl TypeMapKey for UserTrackMap {
-    type Value = Arc<RwLock<HashMap<GuildId, HashMap<Uuid, UserId>>>>;
-}
-
-
-#[hook]
-async fn dynamic_prefix(ctx: &Context, msg: &Message) -> Option<String> {
-    let guild_id = match msg.guild_id {
-        Some(id) => id.0,
-        None => 0,
-    };
-
-    let prefix: String;
-
-    if guild_id != 0 {
-        let data = ctx.data.read().await;
-        let database = data.get::<Database>().expect("Expected Database in TypeMap");
-
-        database.lookup("guild_settings", guild_id).await;
-        prefix = database.retrieve_str("guild_settings", "prefix", guild_id).await;
-    } else {
-        prefix = "!".to_string();
-    }
-
-    Some(prefix)
-}
-
-
+pub struct Data {
+    database: DatabaseManager,
+    lavalink: LavalinkClient,
+} // User data, which is stored and accessible in all command invocations
+type Error = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() {
@@ -145,71 +30,125 @@ async fn main() {
     // the CWD. See `./.env.example` for an example on how to structure this.
     dotenv::dotenv().expect("Failed to load .env file");
 
-    // Initialize the logger to use environment variables.
-    //
-    // In this case, a good default is setting the environment variable
-    // `RUST_LOG` to debug`.
-    let subscriber = FmtSubscriber::builder()
-        .with_env_filter(EnvFilter::from_default_env())
-        .finish();
+    tracing_subscriber::fmt::init();
 
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to start the logger");
+    let token =
+        env::var("DISCORD_TOKEN").expect("Expected a token in the environment (DISCORD_TOKEN)");
 
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let db_host = &env::var("MYSQL_HOST")
+        .expect("Expected the database host in the environment (MYSQL_HOST)");
+    let username = &env::var("MYSQL_USERNAME")
+        .expect("Expected the database username in the environment (MYSQL_USERNAME)");
+    let password = &env::var("MYSQL_PASSWORD")
+        .expect("Expected the database password in the environment (MYSQL_PASSWORD)");
+    let database =
+        &env::var("MYSQL_DB").expect("Expected the database name in the environment (MYSQL_DB)");
 
-    let http = Http::new_with_token(&token);
+    let lavalink_host = env::var("LAVALINK_HOST")
+        .expect("Expected the lavalink host in the environment (LAVALINK_HOST)");
+    let lavalink_password = env::var("LAVALINK_PASSWORD")
+        .expect("Expected the lavalink host in the environment (LAVALINK_PASSWORD)");
+    let lavalink_ssl = env::var("LAVALINK_SSL")
+        .expect("Expected the lavalink ssl in the environment (LAVALINK_SSL)");
 
-    // We will fetch your bot's owners and id
-    let (owners, bot_id) = match http.get_current_application_info().await {
-        Ok(info) => {
-            let mut owners = HashSet::new();
-            owners.insert(info.owner.id);
+    // Connect to mysql database
+    let connection_options = sqlx::mysql::MySqlConnectOptions::new();
 
-            (owners, info.id)
-        }
-        Err(why) => panic!("Could not access application info: {:?}", why),
-    };
-    
-    // Create the framework
-    let framework = StandardFramework::new()
-        .configure(|c| {
-            c
-            .owners(owners)
-            .on_mention(Some(bot_id))
-            .dynamic_prefix(dynamic_prefix)
-        })
-        .group(&GENERAL_GROUP);
-
-    let database = DatabaseTool {pool: SqlitePool::connect("sqlite:main.db").await.expect("Database may not exist")};
-    let guild_skip_votes = Arc::new(RwLock::new(HashMap::new()));
-    let user_track_map = Arc::new(RwLock::new(HashMap::new()));
-
-    let mut client = Client::builder(&token)
-        .framework(framework)
-        .event_handler(Handler)
-        .register_songbird()
-        .await
-        .expect("Err creating client");
-
-    {
-        let mut data = client.data.write().await;
-        data.insert::<Database>(database);
-        data.insert::<GuildSkipVotes>(guild_skip_votes);
-        data.insert::<UserTrackMap>(user_track_map);
-        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-    }
-
-    let shard_manager = client.shard_manager.clone();
-
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c()
+    let database = DatabaseManager {
+        pool: sqlx::mysql::MySqlPoolOptions::new()
+            .max_connections(5)
+            .connect_with(
+                connection_options
+                    .disable_statement_logging()
+                    .host(db_host)
+                    .username(username)
+                    .password(password)
+                    .database(database),
+            )
             .await
-            .expect("Could not register ctrl+c handler");
-        shard_manager.lock().await.shutdown_all().await;
-    });
+            .expect("Couldn't connect to database."),
+    };
 
-    if let Err(why) = client.start().await {
-        error!("Client error: {:?}", why);
+    let framework = poise::Framework::builder()
+        .token(token)
+        .client_settings(|c| c.register_songbird())
+        .options(poise::FrameworkOptions {
+            owners: HashSet::from([serenity::UserId(126179145297166336)]),
+            commands: vec![settings(), play(), force_skip(), reorder(), queue(), remove()],
+            // Run before every command
+            pre_command: |context| {
+                Box::pin(async move {
+                    let channel_name = &context
+                        .channel_id()
+                        .name(&context)
+                        .await
+                        .unwrap_or_else(|| "<unknown>".to_owned());
+                    let author = &context.author().name;
+
+                    info!(
+                        "{} in {} used slash command '{}'",
+                        author,
+                        channel_name,
+                        &context.invoked_command_name()
+                    );
+                })
+            },
+            // Run after every command that returned Ok
+            post_command: |context| {
+                Box::pin(async move {
+                    info!(
+                        "Executed command {} successfully",
+                        context.command().qualified_name
+                    );
+                })
+            },
+            ..Default::default()
+        })
+        .intents(serenity::GatewayIntents::all())
+        .setup(|context, ready, framework| {
+            Box::pin(async move {
+                poise::builtins::register_globally(context, &framework.options().commands).await?;
+
+                let events = events::Events {
+                    raw: Some(raw_event),
+                    ready: Some(ready_event),
+                    ..Default::default()
+                };
+
+                let node_local = NodeBuilder {
+                    hostname: lavalink_host,
+                    is_ssl: lavalink_ssl.as_str() == "true",
+                    events: events::Events::default(),
+                    password: lavalink_password,
+                    user_id: context.cache.current_user_id().into(),
+                    session_id: None,
+                };
+
+                let client = LavalinkClient::new(events, vec![node_local]);
+
+                client.start().await;
+
+                info!("Bot logged in as {}", ready.user.name);
+
+                Ok(Data {
+                    database,
+                    lavalink: client,
+                })
+            })
+        });
+
+    framework.run().await.unwrap();
+}
+
+#[hook]
+async fn raw_event(_: LavalinkClient, session_id: String, event: &serde_json::Value) {
+    if event["op"].as_str() == Some("event") || event["op"].as_str() == Some("playerUpdate") {
+        info!("Raw event: {:?} -> {:?}", session_id, event);
     }
 }
 
+#[hook]
+async fn ready_event(client: LavalinkClient, session_id: String, event: &events::Ready) {
+    client.delete_all_player_contexts().await.unwrap();
+    info!("Ready event: {:?} -> {:?}", session_id, event);
+}

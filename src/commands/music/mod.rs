@@ -1,12 +1,17 @@
-pub mod clear;
-pub mod force_skip_to;
-pub mod force_skip;
-pub mod join;
-pub mod leave;
-pub mod now_playing;
 pub mod play;
+pub mod force_skip;
+pub mod reorder;
 pub mod queue;
 pub mod remove;
-pub mod reorder;
-pub mod shuffle;
-pub mod skip;
+
+fn millis_to_string(millis: u64) -> String {
+    let seconds = (millis / 1000) % 60;
+    let minutes = (millis / (1000 * 60)) % 60;
+    let hours = (millis / (1000 * 60 * 60)) % 60;
+
+    if hours > 0 {
+        format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+    } else {
+        format!("{:02}:{:02}", minutes, seconds)
+    }
+}

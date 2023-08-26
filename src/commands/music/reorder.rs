@@ -1,95 +1,62 @@
-use crate::util::{
-    music::MusicCommand,
-    misc::check_msg,
-    embeds,
+use crate::{
+    responses::{self, Say},
+    Context, Error,
 };
 
-use std::collections::VecDeque;
+// Move a track from one position in the queue to another
+#[poise::command(slash_command)]
+pub async fn reorder(
+    context: Context<'_>,
+    #[description = "The position of the track in the queue that you want to move."]
+    #[rename = "from"]
+    position_from: usize,
+    #[description = "The position that you want to move the track to."]
+    #[rename = "to"]
+    position_to: usize
+) -> Result<(), Error> {
+    let guild = context.guild().unwrap();
+    let guild_id = guild.id;
 
-use serenity::{
-    client::Context,
-    framework::standard::{macros::command, Args, CommandResult},
-    model::channel::Message,
-};
+    let lava_client = context.data().lavalink.clone();
 
-use songbird::tracks::Queued;
+    let Some(player_context) = lava_client.get_player_context(guild_id) else {
+        responses::ErrorMessage::BotNotInVC.say(context).await?;
+        return Ok(());
+    };
 
+    if player_context.get_player().await?.track.is_none() {
+        responses::ErrorMessage::BotNotPlaying.say(context).await?;
+        return Ok(());
+    }
 
+    let mut queue = player_context.get_queue().await?;
+    let queue_length = queue.len();
 
-#[command]
-#[only_in(guilds)]
-#[aliases(m, move)]
-async fn reorder(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let mc = MusicCommand::new(ctx, msg).await;
-    let handler_lock = mc.connected().await;
+    // Test if the either position is valid
+    if 1 > position_from || position_from >= queue_length || 1 > position_to || position_to > queue_length  {
+        responses::ErrorMessage::InvalidMove.say(context).await?;
+        return Ok(());
+    }
 
-    // Requires the DJ role or the Manage Guild permission
-    if handler_lock.is_some() && mc.has_dj().await {
-        let handler_lock = handler_lock.unwrap();
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-    
-        let queue_length = queue.len();
-        match queue_length {
-            0 => embeds::not_playing(ctx, msg).await,
-            1 => check_msg(msg.channel_id.say(&ctx.http, "`Placeholder` There is only one song.").await),
-            _ => {
+    let index_from = position_from - 1;
+    let index_to = position_to - 1;
 
-                let first_index = match args.single::<usize>() {  
-                    Ok(0) => {
-                        check_msg(msg.channel_id.say(&ctx.http, "`Placeholder` First index out of range.").await);
-                        return Ok(());
-                    }
-                    Ok(first_index) => first_index,
-                    Err(_) => {
-                        check_msg(msg.channel_id.say(&ctx.http, "`Placeholder` First index invalid.").await);
-                        return Ok(());
-                    }
-                };
+    let wrapped_track = queue.remove(index_from);
 
-                let second_index = match args.single::<usize>() {  
-                    Ok(0) => {
-                        check_msg(msg.channel_id.say(&ctx.http, "`Placeholder` Second index out of range.").await);
-                        return Ok(());
-                    }
-                    Ok(second_index) => second_index,
-                    Err(_) => {
-                        check_msg(msg.channel_id.say(&ctx.http, "`Placeholder` Second index invalid.").await);
-                        return Ok(());
-                    }
-                };
-
-                if first_index == second_index {
-                    check_msg(msg.channel_id.say(&ctx.http, "`Placeholder` Cannot replace a song with itself.").await);
-                    return Ok(());
-                }
-
-                if first_index >= queue_length || second_index >= queue_length {
-                    embeds::index_oor(ctx, msg).await;
-                    return Ok(());
-                }
-
-                check_msg(msg.channel_id.say(&ctx.http, format!("`Placeholder` Moved song {} to position {}.", first_index, second_index)).await);
-
-                // if first_index < second_index {
-                //     second_index = second_index - 1;
-                // }
-
-                let song = match queue.dequeue(first_index) {
-                    Some(song) => song,
-                    None => {
-                        check_msg(msg.channel_id.say(&ctx.http, "`Placeholder` Error moving song.").await);
-                        return Ok(())
-                    }
-                };
-                
-                let add = |q: &mut VecDeque<Queued>| {
-                    q.insert(second_index, song);
-                };
-
-                queue.modify_queue(add);
-
+    match wrapped_track {
+        Some(wrapped_track) => {
+            let track = &wrapped_track.track;
+            
+            match &track.info.uri {
+                Some(uri) => responses::default(context, format!("Moved [{} - {}]({}) from position {} to position {}.", track.info.author, track.info.title, uri, position_from, position_to)).await?,
+                None => responses::default(context, format!("Moved {} - {} from position {} to position {}.", track.info.author, track.info.title, position_from, position_to)).await?,
             }
+
+            queue.insert(index_to, wrapped_track);
+            player_context.replace_queue(queue)?;
+        },
+        None => {
+            responses::error(context, "Tried to remove a track the queue at an invalid index. (This should never happen!)").await?;
         }
     }
 

@@ -1,7 +1,2 @@
 /target
 .env
-main.db
-main.db-shm
-main.db-wal
-stride.exe
-rustfmt.toml
