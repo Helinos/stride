@@ -4,7 +4,7 @@ mod responses;
 
 use std::{collections::{HashSet, VecDeque}, env, time::Duration};
 
-use commands::{music::{play::play, force_skip::force_skip, reorder::reorder, queue::queue, remove::remove}, settings::settings};
+use commands::{music::{play::play, force_skip::force_skip, reorder::reorder, queue::queue, remove::remove, leave::leave, clear::clear}, settings::settings};
 use hook::hook;
 use lavalink_rs::{
     model::{events, track::TrackData},
@@ -77,7 +77,7 @@ async fn main() {
         .client_settings(|c| c.register_songbird())
         .options(poise::FrameworkOptions {
             owners: HashSet::from([serenity::UserId(126179145297166336)]),
-            commands: vec![settings(), play(), force_skip(), reorder(), queue(), remove()],
+            commands: vec![settings(), play(), force_skip(), reorder(), queue(), remove(), leave(), clear()],
             // Run before every command
             pre_command: |context| {
                 Box::pin(async move {

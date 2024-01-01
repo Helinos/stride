@@ -90,6 +90,7 @@ pub async fn queue(
             let track = &wrapped_track.track;
             let title = &track.info.title;
             let position = (page - 1) * 10 + count + 1;
+            let duration = track.info.length;
 
             match &track.info.uri {
                 Some(uri) => queue_string.push_str(

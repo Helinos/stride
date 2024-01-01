@@ -3,6 +3,7 @@ use songbird::error::JoinError;
 
 use crate::{Context, Error};
 
+#[derive(PartialEq)]
 pub enum Color {
     Default,
     Error,
@@ -52,6 +53,7 @@ async fn generic(
                     .color(color.to_color())
                     .description(description.into())
             })
+            .ephemeral(color == Color::Error)
         })
         .await?;
 

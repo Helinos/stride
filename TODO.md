@@ -10,8 +10,8 @@
 - [x] **Forceskip**: Skip without voting
 - [x] **Reorder**: Move song to be after a different song in queue
 - [X] **Remove**: Remove a song from queue
-- [ ] **Leave**: Leave the voice channel and clear the queue
-- [ ] **Clear**: Clear the entire queue
+- [X] **Leave**: Leave the voice channel and clear the queue
+- [X] **Clear**: Clear the entire queue
 - [ ] **Loop**: Loop the currently playing song
 - [ ] **Loopqueue**: Loop the current queue
 - [ ] **Removedupes**: Remove duplicate songs

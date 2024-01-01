@@ -8,7 +8,7 @@ use lavalink_rs::{prelude::{SearchEngines, TrackInQueue, TrackLoadData}, player_
 use tracing::info;
 
 /// Play a song in the voice channel you are connected to.
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command)]
 pub async fn play(
     context: Context<'_>,
     #[description = "Search term or URL"] query: String,
