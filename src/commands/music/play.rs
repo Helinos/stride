@@ -1,8 +1,10 @@
+use std::collections::VecDeque;
+
 use crate::{
     responses::{self, Say},
     Context, Error, commands::music::millis_to_string,
 };
-use lavalink_rs::prelude::{SearchEngines, TrackInQueue, TrackLoadData};
+use lavalink_rs::{prelude::{SearchEngines, TrackInQueue, TrackLoadData}, player_context::QueueMessage};
 use tracing::info;
 
 /// Play a song in the voice channel you are connected to.
@@ -55,6 +57,7 @@ pub async fn play(
         }
     }
 
+    // This will only happen if someone disconnects the bot milliseconds after playing a song. I assume.
     let Some(player_context) = lava_client.get_player_context(guild_id) else {
         responses::ErrorMessage::BotNotInVC.say(context).await?;
         return Ok(());
@@ -73,17 +76,17 @@ pub async fn play(
     let mut playlist_info = None;
     let mut playlist_count = None;
 
-    let tracks: Vec<TrackInQueue> = match loaded_tracks.data {
-        Some(TrackLoadData::Track(x)) => vec![x.into()],
-        Some(TrackLoadData::Search(x)) => vec![x[0].clone().into()],
-        Some(TrackLoadData::Playlist(x)) => {
-            playlist_info = Some(x.info);
-            playlist_count = Some(x.tracks.len());
-            x.tracks.iter().map(|x| x.into()).collect()
+    let tracks: VecDeque<TrackInQueue> = match loaded_tracks.data {
+        Some(TrackLoadData::Track(track)) => VecDeque::from([track.into()]),
+        Some(TrackLoadData::Search(search_results)) => VecDeque::from([search_results[0].clone().into()]),
+        Some(TrackLoadData::Playlist(playlist)) => {
+            playlist_info = Some(playlist.info);
+            playlist_count = Some(playlist.tracks.len());
+            playlist.tracks.iter().map(|track| track.into()).collect()
         }
 
         _ => {
-            context.say(format!("{:?}", loaded_tracks)).await?;
+            context.say(format!("Something went horribly wrong. Here's some dubiously relevant data: {:?}", loaded_tracks)).await?;
             return Ok(());
         }
     };
@@ -169,7 +172,14 @@ pub async fn play(
         }
     }
 
-    player_context.append_queue(tracks)?;
+    player_context.set_queue(QueueMessage::Append(tracks))?;
+
+    // We need to skip if there's nothing currently playing? I got this from the example
+    if let Ok(player_data) = player_context.get_player().await {
+        if player_data.track.is_none() && player_context.get_queue().await.is_ok_and(|queue| !queue.is_empty()) {
+            player_context.skip()?;
+        }
+    }
 
     Ok(())
 }

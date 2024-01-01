@@ -89,9 +89,7 @@ pub async fn queue(
         {
             let track = &wrapped_track.track;
             let title = &track.info.title;
-            let duration = track.info.length;
             let position = (page - 1) * 10 + count + 1;
-            total_length += duration;
 
             match &track.info.uri {
                 Some(uri) => queue_string.push_str(
@@ -119,6 +117,10 @@ pub async fn queue(
             if queue_string.len() == 2000 {
                 break;
             }
+        }
+
+        for wrapped_track in queue {
+            total_length += wrapped_track.track.info.length;
         }
     }
 

@@ -5,9 +5,11 @@
 - [ ] **Now Playing**: View the currently playing song
 
 ### DJ / Admin Only
+- [ ] **Playskip**: Replace the currently playing song with the given one
+- [ ] **Playtop**: Add a song to the top of the queue
 - [x] **Forceskip**: Skip without voting
 - [x] **Reorder**: Move song to be after a different song in queue
-- [ ] **Remove**: Remove a song from queue
+- [X] **Remove**: Remove a song from queue
 - [ ] **Leave**: Leave the voice channel and clear the queue
 - [ ] **Clear**: Clear the entire queue
 - [ ] **Loop**: Loop the currently playing song
@@ -15,7 +17,7 @@
 - [ ] **Removedupes**: Remove duplicate songs
 - [ ] **Absentcleanup**: Remove songs queued by people that left the voice channel
 - [ ] **Favorite**: Add a song to the server's favorites
-- [ ] **Playfavorite**:
+- [ ] **Playfavorites**:
  - Either add to the queue or replace it
  - Either in order or shuffled
 
@@ -27,6 +29,8 @@
 - [x] **DJ Role**: Set the dj role
 - [x] **DJ Only Mode**: Songs can only be played by people with the DJ role
 - [x] **Announce Songs**: Bot announces each song as it comes up in the queue (Requires single channel mode)
+- [ ] **DJ Skip is Forceskip**: Treats /skip commands issued by DJs as if they were forceskips
+- [ ] **Enable Sponsorblock**
 
 ## Funny commands (Only useable by hardcoded guilds)
 - [ ] **Play later**:

@@ -1,3 +1,5 @@
+use lavalink_rs::player_context::QueueMessage;
+
 use crate::{
     responses::{self, Say},
     Context, Error,
@@ -53,7 +55,7 @@ pub async fn reorder(
             }
 
             queue.insert(index_to, wrapped_track);
-            player_context.replace_queue(queue)?;
+            player_context.set_queue(QueueMessage::Replace(queue))?;
         },
         None => {
             responses::error(context, "Tried to remove a track the queue at an invalid index. (This should never happen!)").await?;

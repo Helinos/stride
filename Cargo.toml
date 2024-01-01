@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-itertools = "0.11"
+itertools = "0.12"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 serde_json = "1"
@@ -15,7 +15,7 @@ dotenv = "0.15.0"
 indexmap = "2.0.0"
 
 [dependencies.poise]
-version = "0.5"
+version = "0.5.7"
 default-features = false
 features = ["cache", "chrono", "handle_panics"]
 
@@ -32,7 +32,7 @@ features = ["rt-multi-thread", "macros"]
 git = "https://github.com/arqunis/hook"
 
 [dependencies.lavalink-rs]
-version = "0.10.0-beta"
+version = "0.10.0-beta.3"
 default-features = false
 features = ["songbird", "serenity-native", "native-tls"]
 

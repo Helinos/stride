@@ -1,3 +1,5 @@
+use lavalink_rs::player_context::QueueMessage;
+
 use crate::{
     responses::{self, Say},
     Context, Error,
@@ -45,7 +47,7 @@ pub async fn remove(
     }
     
     queue.remove(position - 1);
-    player_context.replace_queue(queue)?;
+    player_context.set_queue(QueueMessage::Replace(queue))?;
 
     Ok(())
 }

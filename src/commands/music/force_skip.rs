@@ -1,3 +1,5 @@
+use lavalink_rs::player_context::QueueMessage;
+
 use crate::{
     responses::{self, Say},
     Context, Error,
@@ -30,26 +32,20 @@ pub async fn force_skip(
 
     match position {
         Some(position) => {
-            
             if 1 > position || position > queue_length {
                 responses::ErrorMessage::InvalidSkip.say(context).await?;
                 return Ok(());
             }
 
             let new_queue = queue.split_off(position as usize - 1);
-            player_context.replace_queue(new_queue)?;
+            player_context.set_queue(QueueMessage::Replace(new_queue))?;
 
             responses::DefaultMessage::SkippedTo(position).say(context).await?;
         }
         None => responses::DefaultMessage::Skipped.say(context).await?,
     }
-
-    if queue_length == 0 {
-        player_context.finish(false)?;
-    } else {
-        player_context.skip()?;
-    }
     
+    player_context.skip()?;
 
     Ok(())
 }

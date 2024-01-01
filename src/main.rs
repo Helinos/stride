@@ -2,15 +2,18 @@ mod commands;
 mod database;
 mod responses;
 
-use std::{collections::HashSet, env};
+use std::{collections::{HashSet, VecDeque}, env, time::Duration};
 
 use commands::{music::{play::play, force_skip::force_skip, reorder::reorder, queue::queue, remove::remove}, settings::settings};
 use hook::hook;
 use lavalink_rs::{
-    model::events,
-    prelude::{LavalinkClient, NodeBuilder},
+    model::{events, track::TrackData},
+    prelude::{LavalinkClient, NodeBuilder}, player_context::{self, TrackInQueue},
 };
-use poise::serenity_prelude as serenity;
+use poise::{
+    Event,
+    serenity_prelude::{self as serenity}
+};
 
 use database::DatabaseManager;
 use songbird::SerenityInit;
@@ -102,6 +105,9 @@ async fn main() {
                     );
                 })
             },
+            event_handler: |context, event, framework, data| {
+                Box::pin(event_handler(context, event, framework, data))
+            },
             ..Default::default()
         })
         .intents(serenity::GatewayIntents::all())
@@ -145,10 +151,96 @@ async fn raw_event(_: LavalinkClient, session_id: String, event: &serde_json::Va
     if event["op"].as_str() == Some("event") || event["op"].as_str() == Some("playerUpdate") {
         info!("Raw event: {:?} -> {:?}", session_id, event);
     }
+
+    if event["op"].as_str() == Some("event") {
+        match event["type"].as_str() {
+            Some("WebSocketClosedEvent") => {
+
+            },
+            Some(_) => (),
+            None => (),
+        }
+    }
 }
 
 #[hook]
 async fn ready_event(client: LavalinkClient, session_id: String, event: &events::Ready) {
     client.delete_all_player_contexts().await.unwrap();
     info!("Ready event: {:?} -> {:?}", session_id, event);
+}
+
+async fn event_handler(
+    context: &serenity::Context,
+    event: &Event<'_>,
+    _framework: poise::FrameworkContext<'_, Data, Error>,
+    data: &Data,
+) -> Result<(), Error> {
+    match event {
+        Event::VoiceServerUpdate { update } => {
+            let guild_id = update.guild_id.unwrap();
+            
+            let manager = songbird::get(context)
+                .await
+                .unwrap()
+                .clone();
+
+            let call_option = manager.get(guild_id);
+
+            let Some(call) = call_option else {
+                return Ok(());
+            };
+
+            let connection_info = call.lock().await.current_connection().unwrap().clone();
+            let lava_client = data.lavalink.clone();
+            
+            let Some(player_context) = lava_client.get_player_context(guild_id) else {
+                return Ok(());
+            };
+
+            let track_position_queue: Option<(TrackData, u64, VecDeque<TrackInQueue>)>;
+            
+            let player = player_context.get_player().await?;
+            if let Some(track) = player.track {
+                let position = player.state.position;
+                let queue = player_context.get_queue().await?;
+                track_position_queue = Some((track, position, queue));
+            } else {
+                track_position_queue = None;
+            }
+
+            lava_client.delete_player(guild_id).await?;
+            lava_client.create_player_context(guild_id, connection_info).await?;
+
+            let Some(player_context) = lava_client.get_player_context(guild_id) else {
+                return Ok(());
+            };
+
+            if let Some((track, position, queue)) = track_position_queue {
+                player_context.play_now(&track).await?;
+                player_context.set_position(Duration::from_millis(position)).await?;
+                player_context.set_queue(player_context::QueueMessage::Replace(queue))?;
+            }
+        }
+
+        Event::VoiceStateUpdate { old: _, new } => {
+            let current_user_id = context.cache.current_user_id();
+
+            if new.user_id != current_user_id {
+                return Ok(());
+            }
+
+            if new.channel_id.is_some() {
+                return Ok(());
+            }
+
+            let lava_client = data.lavalink.clone();
+
+            let guild_id = new.guild_id.unwrap();
+            lava_client.delete_player(guild_id).await?;
+        }
+
+        _ => ()
+    }
+    
+    Ok(())
 }
