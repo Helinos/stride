@@ -5,7 +5,7 @@
 - [ ] **Now Playing**: View the currently playing song
 
 ### DJ / Admin Only
-- [ ] **Playskip**: Replace the currently playing song with the given one
+- [X] **Playskip**: Replace the currently playing song with the given one
 - [ ] **Playtop**: Add a song to the top of the queue
 - [x] **Forceskip**: Skip without voting
 - [x] **Reorder**: Move song to be after a different song in queue
